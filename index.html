@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JWT Claims Xray: Decode and Verify JWTs Offline, Safely</title>
+<meta name="description" content="Decode, verify (HS256/RS256/ES256) and expiry-check JWTs entirely offline, with a visible zero-network guarantee and a redacted share mode.">
+<meta name="keywords" content="JWT decoder online safe, decode JWT without uploading, JWT verify signature online HS256 RS256, JWT expiry checker">
+<meta name="author" content="Amir Hussain">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://aamirtechs.github.io/jwt-claims-xray/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0b1f3a">
+<meta property="og:type" content="website">
+<meta property="og:title" content="JWT Claims Xray: Decode and Verify JWTs Offline, Safely">
+<meta property="og:description" content="Decode, verify (HS256/RS256/ES256) and expiry-check JWTs entirely offline, with a visible zero-network guarantee and a redacted share mode.">
+<meta property="og:url" content="https://aamirtechs.github.io/jwt-claims-xray/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="JWT Claims Xray">
+<meta name="twitter:description" content="Decode and verify JWTs entirely offline. No token ever leaves this tab or goes in a URL.">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"JWT Claims Xray","applicationCategory":"DeveloperApplication","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Person","name":"Amir Hussain","url":"https://aamirtechs.com"},"url":"https://aamirtechs.github.io/jwt-claims-xray/"}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0b1f3a;--navy2:#122c50;--gold:#d4a72c;--ink:#16233a;--muted:#5a6a84;--line:#e3e9f2;--bg:#f6f8fb;--card:#ffffff}
+*{box-sizing:border-box}body{margin:0;font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--ink)}
+header{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;padding:44px 20px 34px;text-align:center}
+header h1{font-family:Sora,sans-serif;font-size:2.2rem;margin:0 0 10px}header h1 span{color:var(--gold)}
+header p{max-width:680px;margin:0 auto 16px;opacity:.92}
+.stats{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}.stats span{border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:5px 14px;font-size:.85rem}
+main{max-width:980px;margin:0 auto;padding:24px 16px 40px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;box-shadow:0 6px 24px rgba(11,31,58,.06)}
+label{font-weight:700;display:block;margin:14px 0 6px}textarea,input[type=text]{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font:inherit}
+.btn-run{background:var(--gold);color:var(--navy);border:0;border-radius:10px;padding:12px 22px;cursor:pointer;font:inherit;font-weight:800;margin-top:16px}
+.btn-sec{background:var(--navy);color:#fff;border:0;border-radius:10px;padding:10px 18px;cursor:pointer;font:inherit;margin:8px 6px 0 0}
+.privacy{color:var(--muted);font-size:.9rem;margin-top:10px}
+.guarantee{background:#eef6ee;border:1px solid #bcd8bc;border-radius:10px;padding:12px 14px;margin-top:14px}
+pre{background:#0b1f3a;color:#e8eef7;border-radius:10px;padding:14px;overflow:auto;white-space:pre-wrap;word-break:break-all}
+table{width:100%;border-collapse:collapse;margin-top:10px}td,th{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top;word-break:break-all}
+section.features{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px 24px;margin-top:20px}
+footer{background:var(--navy);color:#dbe4f0;text-align:center;padding:26px 16px;font-size:.92rem}footer a{color:var(--gold)}
+.msg{margin-top:12px;white-space:pre-wrap;font-weight:700}
+</style>
+</head>
+<body>
+<header>
+<h1>JWT Claims <span>Xray</span></h1>
+<p>Decode, verify (HS256/RS256/ES256) and expiry-check JWTs entirely offline, with a visible zero-network guarantee and a redacted share mode.</p>
+<div class="stats"><span>Free</span><span>100% in your browser</span><span>No sign-up</span></div>
+</header>
+<main>
+<div class="card">
+<div class="guarantee"><strong>Zero-network guarantee:</strong> open your browser Network tab and reload. After this page and its libraries load, decoding and verifying a token makes no network requests. The token is never put in the URL.</div>
+<label for="token">Token</label>
+<textarea id="token" rows="5" placeholder="Paste a JWT here. It stays in this tab."></textarea>
+<button class="btn-run" id="decode">Decode token</button>
+<button class="btn-sec" id="redact">Copy redacted version</button>
+<div class="msg" id="status" role="status"></div>
+<h3>Header</h3><pre id="headerOut">{}</pre>
+<h3>Payload claims</h3><div id="claims"></div>
+<h3>Expiry</h3><p id="expiry">Decode a token to see its expiry status and countdown.</p>
+<h3>Verify signature (WebCrypto, local only)</h3>
+<label for="key">HS secret, or PEM public key for RS256 / ES256</label>
+<textarea id="key" rows="4" placeholder="For HS256 paste the shared secret. For RS256 or ES256 paste a PEM public key."></textarea>
+<button class="btn-sec" id="verify">Verify signature</button>
+<p class="msg" id="verifyOut"></p>
+<h3>Compare two tokens</h3>
+<label for="token2">Second token</label>
+<textarea id="token2" rows="4" placeholder="Paste a second token to diff its claims against the first."></textarea>
+<button class="btn-sec" id="diff">Diff claims</button>
+<div id="diffOut"></div>
+<p class="privacy">Runs 100% in your browser. Your files never leave this device.</p>
+</div>
+<section class="features">
+<h2>How it works</h2>
+<ul>
+<li>Decodes header and payload locally and humanises registered claims: exp, iat and nbf become local and UTC times with a live countdown.</li>
+<li>Verifies HS256, RS256 and ES256 signatures with WebCrypto in the page. Nothing is sent to a server.</li>
+<li>Paste two tokens to get a claim-by-claim diff of what changed.</li>
+<li>Redacted copy masks the signature and sensitive claims, safe to paste into a support ticket.</li>
+<li>Works offline after load. Decoding is not verification, so always verify before trusting a token.</li>
+</ul>
+</section>
+</main>
+<footer>
+<p>Built by Amir Hussain, operations manager and founder of <a href="https://aamirtechs.com" target="_blank" rel="noopener">AamirTechs: operations, customer support and e-commerce services</a>.</p>
+<p><a href="https://github.com/aamirtechs" target="_blank" rel="noopener">More open source tools on GitHub</a></p>
+</footer>
+<script src="src/logic.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+let countdownTimer = null;
+function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+function decodeCurrent() { return JwtClaimsXray.decodeJwt($("token").value); }
+$("decode").addEventListener("click", () => {
+  try {
+    const d = decodeCurrent();
+    $("headerOut").textContent = JSON.stringify(d.header, null, 2);
+    const rows = JwtClaimsXray.humaniseClaims(d.payload);
+    $("claims").innerHTML = "<table><tr><th>Claim</th><th>Meaning</th><th>Value</th><th>Human readable</th></tr>" + rows.map((r) => "<tr><td>" + esc(r.claim) + "</td><td>" + esc(r.description) + "</td><td>" + esc(JSON.stringify(r.value)) + "</td><td>" + esc(r.human || "") + "</td></tr>").join("") + "</table>";
+    const issues = JwtClaimsXray.timeClaimStatus(d.payload);
+    function tick() {
+      const st = JwtClaimsXray.expiryStatus(d.payload);
+      $("expiry").textContent = st.label + (issues.length ? " Warnings: " + issues.join("; ") : "");
+    }
+    tick(); if (countdownTimer) clearInterval(countdownTimer); countdownTimer = setInterval(tick, 1000);
+    $("status").textContent = "Decoded locally. Algorithm: " + (d.header.alg || "none declared") + ".";
+  } catch (e) { $("status").textContent = "Error: " + e.message; }
+});
+$("redact").addEventListener("click", async () => {
+  try { const r = JwtClaimsXray.buildRedactedCopy($("token").value); await navigator.clipboard.writeText(r.text); $("status").textContent = "Redacted copy copied to clipboard. Signature and sensitive claims are masked."; }
+  catch (e) { $("status").textContent = "Error: " + e.message; }
+});
+function pemToDer(pem) {
+  const body = pem.replace(/-----BEGIN [^-]+-----/, "").replace(/-----END [^-]+-----/, "").replace(/\s/g, "");
+  const bin = atob(body); const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); return bytes;
+}
+function esSigToRaw(sigBytes, alg) {
+  // JWS ES signatures are already raw R||S for WebCrypto in the JWS format used by JWT.
+  return sigBytes;
+}
+$("verify").addEventListener("click", async () => {
+  const out = $("verifyOut");
+  try {
+    const d = decodeCurrent(); const alg = d.header.alg; const keyText = $("key").value;
+    if (!keyText) throw new Error("Paste a secret or public key first.");
+    const enc = new TextEncoder();
+    const sig = JwtClaimsXray.base64UrlToBytes(d.signature);
+    let ok = false;
+    if (alg && alg.indexOf("HS") === 0) {
+      const hash = alg === "HS384" ? "SHA-384" : alg === "HS512" ? "SHA-512" : "SHA-256";
+      const key = await crypto.subtle.importKey("raw", enc.encode(keyText), { name: "HMAC", hash: hash }, false, ["verify"]);
+      ok = await crypto.subtle.verify("HMAC", key, sig, enc.encode(d.signingInput));
+    } else if (alg && alg.indexOf("RS") === 0) {
+      const hash = alg === "RS384" ? "SHA-384" : alg === "RS512" ? "SHA-512" : "SHA-256";
+      const key = await crypto.subtle.importKey("spki", pemToDer(keyText), { name: "RSASSA-PKCS1-v1_5", hash: hash }, false, ["verify"]);
+      ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, sig, enc.encode(d.signingInput));
+    } else if (alg && alg.indexOf("ES") === 0) {
+      const hash = alg === "ES384" ? "SHA-384" : "SHA-256";
+      const curve = alg === "ES384" ? "P-384" : "P-256";
+      const key = await crypto.subtle.importKey("spki", pemToDer(keyText), { name: "ECDSA", namedCurve: curve }, false, ["verify"]);
+      ok = await crypto.subtle.verify({ name: "ECDSA", hash: hash }, key, esSigToRaw(sig, alg), enc.encode(d.signingInput));
+    } else { throw new Error("Unsupported algorithm: " + alg); }
+    out.textContent = ok ? "Signature VALID for " + alg + "." : "Signature INVALID for " + alg + ". Check the key and that the token was not altered.";
+  } catch (e) { out.textContent = "Verification error: " + e.message; }
+});
+$("diff").addEventListener("click", () => {
+  try {
+    const a = decodeCurrent().payload; const b = JwtClaimsXray.decodeJwt($("token2").value).payload;
+    const diff = JwtClaimsXray.diffClaims(a, b);
+    function list(title, items, fmt) { return items.length ? "<h4>" + title + "</h4><ul>" + items.map(fmt).join("") + "</ul>" : ""; }
+    $("diffOut").innerHTML = list("Added in second token", diff.added, (x) => "<li>" + esc(x.claim) + ": " + esc(JSON.stringify(x.to)) + "</li>")
+      + list("Removed from first token", diff.removed, (x) => "<li>" + esc(x.claim) + ": " + esc(JSON.stringify(x.from)) + "</li>")
+      + list("Changed", diff.changed, (x) => "<li>" + esc(x.claim) + ": " + esc(JSON.stringify(x.from)) + " to " + esc(JSON.stringify(x.to)) + "</li>")
+      + (diff.added.length + diff.removed.length + diff.changed.length === 0 ? "<p>No claim differences. The payloads are identical.</p>" : "");
+  } catch (e) { $("diffOut").innerHTML = "<p>Error: " + esc(e.message) + "</p>"; }
+});
+</script>
+</body>
+</html>
