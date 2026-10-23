@@ -127,6 +127,27 @@ function supportedAlg(header) {
   return null;
 }
 
-const api = { base64UrlDecode, base64UrlEncode, base64UrlToBytes, decodeJwt, expiryStatus, timeClaimStatus, humaniseClaims, diffClaims, redactPayload, buildRedactedCopy, supportedAlg, DEFAULT_SENSITIVE };
+// Warn about risky alg/key combinations. Pure: no DOM, no fetch, no network.
+// Returns an array of warning strings (possibly empty).
+function algWarnings(alg, keyText) {
+  const warnings = [];
+  const a = typeof alg === "string" ? alg.trim().toLowerCase() : "";
+  if (!a || a === "none") {
+    warnings.push("Warning: the header declares alg \"none\" — this token is unsigned and cannot be verified. Never accept it as proof of anything.");
+    return warnings;
+  }
+  const key = typeof keyText === "string" ? keyText.trim() : "";
+  const looksPemPublic = /-----BEGIN [^-]*PUBLIC KEY-----/.test(key);
+  const isHmac = a.indexOf("hs") === 0;
+  const isAsymmetric = a.indexOf("rs") === 0 || a.indexOf("es") === 0 || a.indexOf("ps") === 0;
+  if (isHmac && key && looksPemPublic) {
+    warnings.push("Warning: the token uses HMAC (" + alg + "), which needs the shared secret, but the provided key looks like a PEM public key. Paste the shared secret instead.");
+  } else if (isAsymmetric && key && !looksPemPublic) {
+    warnings.push("Warning: the token uses an asymmetric algorithm (" + alg + "), which needs the matching public key, but the provided key does not look like a PEM public key. Paste the PEM public key instead.");
+  }
+  return warnings;
+}
+
+const api = { base64UrlDecode, base64UrlEncode, base64UrlToBytes, decodeJwt, expiryStatus, timeClaimStatus, humaniseClaims, diffClaims, redactPayload, buildRedactedCopy, supportedAlg, algWarnings, DEFAULT_SENSITIVE };
 if (typeof module !== "undefined" && module.exports) { module.exports = api; }
 if (typeof window !== "undefined") { window.JwtClaimsXray = api; }

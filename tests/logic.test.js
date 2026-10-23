@@ -69,3 +69,19 @@ test("supportedAlg accepts common algs and rejects none/unknown", () => {
   assert.equal(L.supportedAlg({ alg: "ES256" }), "ES256");
   assert.equal(L.supportedAlg({ alg: "none" }), null);
 });
+
+test("algWarnings flags alg none, missing alg and key-type mismatches", () => {
+  const pem = "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA\n-----END PUBLIC KEY-----";
+  // alg "none" (and missing alg) warns and returns early
+  assert.ok(L.algWarnings("none", "secret").some((s) => s.includes("unsigned")));
+  assert.ok(L.algWarnings(undefined, "secret").some((s) => s.includes("unsigned")));
+  // HMAC alg with a PEM public key is a mismatch
+  assert.ok(L.algWarnings("HS256", pem).some((s) => s.includes("shared secret")));
+  // asymmetric alg with a non-PEM key is a mismatch
+  assert.ok(L.algWarnings("RS256", "just-a-secret").some((s) => s.includes("PEM public key")));
+  assert.ok(L.algWarnings("ES256", "just-a-secret").some((s) => s.includes("PEM public key")));
+  // matching pairs produce no warnings
+  assert.deepEqual(L.algWarnings("HS256", "correct-horse-battery-staple"), []);
+  assert.deepEqual(L.algWarnings("RS256", pem), []);
+  assert.deepEqual(L.algWarnings("RS256", ""), []);
+});
