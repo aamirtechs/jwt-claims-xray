@@ -104,7 +104,8 @@ $("decode").addEventListener("click", () => {
       $("expiry").textContent = st.label + (issues.length ? " Warnings: " + issues.join("; ") : "");
     }
     tick(); if (countdownTimer) clearInterval(countdownTimer); countdownTimer = setInterval(tick, 1000);
-    $("status").textContent = "Decoded locally. Algorithm: " + (d.header.alg || "none declared") + ".";
+    const algW = JwtClaimsXray.algWarnings(d.header.alg, $("key").value);
+    $("status").textContent = (algW.length ? "WARNING: " + algW.join(" ") + " " : "") + "Decoded locally. Algorithm: " + (d.header.alg || "none declared") + ".";
   } catch (e) { $("status").textContent = "Error: " + e.message; }
 });
 $("redact").addEventListener("click", async () => {
@@ -123,6 +124,8 @@ $("verify").addEventListener("click", async () => {
   const out = $("verifyOut");
   try {
     const d = decodeCurrent(); const alg = d.header.alg; const keyText = $("key").value;
+    const algW = JwtClaimsXray.algWarnings(alg, keyText);
+    if (algW.length) { out.textContent = "WARNING: " + algW.join(" "); return; }
     if (!keyText) throw new Error("Paste a secret or public key first.");
     const enc = new TextEncoder();
     const sig = JwtClaimsXray.base64UrlToBytes(d.signature);
