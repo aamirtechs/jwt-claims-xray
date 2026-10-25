@@ -148,6 +148,62 @@ function algWarnings(alg, keyText) {
   return warnings;
 }
 
-const api = { base64UrlDecode, base64UrlEncode, base64UrlToBytes, decodeJwt, expiryStatus, timeClaimStatus, humaniseClaims, diffClaims, redactPayload, buildRedactedCopy, supportedAlg, algWarnings, DEFAULT_SENSITIVE };
+// JWKS support: pick a verification key by kid from a JWKS the user pastes
+// into the page. The JWKS is parsed locally and never fetched, so the
+// zero-network guarantee stays intact.
+function parseJwks(input) {
+  let doc = input;
+  if (typeof input === "string") {
+    const trimmed = input.trim();
+    if (!trimmed) throw new Error("Paste a JWKS first");
+    try { doc = JSON.parse(trimmed); } catch (e) { throw new Error("JWKS is not valid JSON: " + e.message); }
+  }
+  if (!doc || typeof doc !== "object" || Array.isArray(doc)) throw new Error("JWKS must be an object with a keys array");
+  if (!Array.isArray(doc.keys)) throw new Error("JWKS must have a keys array");
+  doc.keys.forEach((k, i) => {
+    if (!k || typeof k !== "object" || Array.isArray(k)) throw new Error("JWKS key at index " + i + " is not an object");
+  });
+  return doc.keys;
+}
+
+function expectedKtyForAlg(alg) {
+  if (!alg) return null;
+  if (alg.indexOf("HS") === 0) return "oct";
+  if (alg.indexOf("RS") === 0 || alg.indexOf("PS") === 0) return "RSA";
+  if (alg.indexOf("ES") === 0) return "EC";
+  return null;
+}
+
+function expectedCurveForAlg(alg) {
+  if (alg === "ES256") return "P-256";
+  if (alg === "ES384") return "P-384";
+  return null;
+}
+
+// Pick the key for a token: exact kid match when the header carries one;
+// when there is no kid, the single key of a one-key JWKS. The key's kty
+// (and EC curve) must fit the token's alg, so a mismatched key fails here
+// with a clear message instead of a cryptic WebCrypto error.
+function selectJwksKey(jwksInput, kid, alg) {
+  const keys = parseJwks(jwksInput);
+  let key = null;
+  if (kid) {
+    key = keys.filter((k) => k.kid === kid)[0] || null;
+    if (!key) throw new Error("No key with kid '" + kid + "' in JWKS");
+  } else {
+    if (keys.length === 0) throw new Error("JWKS has no keys");
+    if (keys.length > 1) throw new Error("Token has no kid and JWKS has " + keys.length + " keys; cannot pick one");
+    key = keys[0];
+  }
+  if (alg) {
+    const wantKty = expectedKtyForAlg(alg);
+    if (wantKty && key.kty && key.kty !== wantKty) throw new Error("JWKS key kid '" + (key.kid || "") + "' has kty '" + key.kty + "' but alg '" + alg + "' needs '" + wantKty + "'");
+    const wantCurve = expectedCurveForAlg(alg);
+    if (wantCurve && key.crv && key.crv !== wantCurve) throw new Error("JWKS key kid '" + (key.kid || "") + "' is on curve '" + key.crv + "' but alg '" + alg + "' needs '" + wantCurve + "'");
+  }
+  return key;
+}
+
+const api = { base64UrlDecode, base64UrlEncode, base64UrlToBytes, decodeJwt, expiryStatus, timeClaimStatus, humaniseClaims, diffClaims, redactPayload, buildRedactedCopy, supportedAlg, algWarnings, parseJwks, selectJwksKey, DEFAULT_SENSITIVE };
 if (typeof module !== "undefined" && module.exports) { module.exports = api; }
 if (typeof window !== "undefined") { window.JwtClaimsXray = api; }

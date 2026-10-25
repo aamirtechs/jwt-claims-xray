@@ -62,6 +62,9 @@ footer{background:var(--navy);color:#dbe4f0;text-align:center;padding:26px 16px;
 <h3>Verify signature (WebCrypto, local only)</h3>
 <label for="key">HS secret, or PEM public key for RS256 / ES256</label>
 <textarea id="key" rows="4" placeholder="For HS256 paste the shared secret. For RS256 or ES256 paste a PEM public key."></textarea>
+<label for="jwks">Or paste a JWKS (optional, pasted JSON only — never fetched)</label>
+<textarea id="jwks" rows="4" placeholder='{"keys": [{"kty": "RSA", "kid": "key-1", "n": "...", "e": "AQAB"}]}'></textarea>
+<p class="privacy">When a JWKS is pasted, the key matching the token's kid is used instead of the secret / PEM key above. No JWKS URL is fetched, so the zero-network guarantee still holds.</p>
 <button class="btn-sec" id="verify">Verify signature</button>
 <p class="msg" id="verifyOut"></p>
 <h3>Compare two tokens</h3>
@@ -76,6 +79,7 @@ footer{background:var(--navy);color:#dbe4f0;text-align:center;padding:26px 16px;
 <ul>
 <li>Decodes header and payload locally and humanises registered claims: exp, iat and nbf become local and UTC times with a live countdown.</li>
 <li>Verifies HS256, RS256 and ES256 signatures with WebCrypto in the page. Nothing is sent to a server.</li>
+<li>Paste a JWKS to verify with the key matching the token's kid, instead of a single secret or PEM key.</li>
 <li>Paste two tokens to get a claim-by-claim diff of what changed.</li>
 <li>Redacted copy masks the signature and sensitive claims, safe to paste into a support ticket.</li>
 <li>Works offline after load. Decoding is not verification, so always verify before trusting a token.</li>
@@ -126,11 +130,27 @@ $("verify").addEventListener("click", async () => {
     const d = decodeCurrent(); const alg = d.header.alg; const keyText = $("key").value;
     const algW = JwtClaimsXray.algWarnings(alg, keyText);
     if (algW.length) { out.textContent = "WARNING: " + algW.join(" "); return; }
-    if (!keyText) throw new Error("Paste a secret or public key first.");
+    if (!keyText && !$("jwks").value.trim()) throw new Error("Paste a secret, public key or JWKS first.");
     const enc = new TextEncoder();
     const sig = JwtClaimsXray.base64UrlToBytes(d.signature);
     let ok = false;
-    if (alg && alg.indexOf("HS") === 0) {
+    let kidNote = "";
+    if ($("jwks").value.trim()) {
+      const jwk = JwtClaimsXray.selectJwksKey($("jwks").value, d.header.kid, alg);
+      kidNote = " (JWKS key kid '" + (jwk.kid || "") + "')";
+      const hash = alg === "HS384" || alg === "RS384" || alg === "ES384" ? "SHA-384" : alg === "HS512" || alg === "RS512" ? "SHA-512" : "SHA-256";
+      if (alg && alg.indexOf("HS") === 0) {
+        const key = await crypto.subtle.importKey("jwk", jwk, { name: "HMAC", hash: hash }, false, ["verify"]);
+        ok = await crypto.subtle.verify("HMAC", key, sig, enc.encode(d.signingInput));
+      } else if (alg && alg.indexOf("RS") === 0) {
+        const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: hash }, false, ["verify"]);
+        ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, sig, enc.encode(d.signingInput));
+      } else if (alg && alg.indexOf("ES") === 0) {
+        const curve = alg === "ES384" ? "P-384" : "P-256";
+        const key = await crypto.subtle.importKey("jwk", jwk, { name: "ECDSA", namedCurve: curve }, false, ["verify"]);
+        ok = await crypto.subtle.verify({ name: "ECDSA", hash: hash }, key, esSigToRaw(sig, alg), enc.encode(d.signingInput));
+      } else { throw new Error("Unsupported algorithm: " + alg); }
+    } else if (alg && alg.indexOf("HS") === 0) {
       const hash = alg === "HS384" ? "SHA-384" : alg === "HS512" ? "SHA-512" : "SHA-256";
       const key = await crypto.subtle.importKey("raw", enc.encode(keyText), { name: "HMAC", hash: hash }, false, ["verify"]);
       ok = await crypto.subtle.verify("HMAC", key, sig, enc.encode(d.signingInput));
@@ -144,7 +164,7 @@ $("verify").addEventListener("click", async () => {
       const key = await crypto.subtle.importKey("spki", pemToDer(keyText), { name: "ECDSA", namedCurve: curve }, false, ["verify"]);
       ok = await crypto.subtle.verify({ name: "ECDSA", hash: hash }, key, esSigToRaw(sig, alg), enc.encode(d.signingInput));
     } else { throw new Error("Unsupported algorithm: " + alg); }
-    out.textContent = ok ? "Signature VALID for " + alg + "." : "Signature INVALID for " + alg + ". Check the key and that the token was not altered.";
+    out.textContent = ok ? "Signature VALID for " + alg + kidNote + "." : "Signature INVALID for " + alg + kidNote + ". Check the key and that the token was not altered.";
   } catch (e) { out.textContent = "Verification error: " + e.message; }
 });
 $("diff").addEventListener("click", () => {

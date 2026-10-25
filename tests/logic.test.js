@@ -85,3 +85,37 @@ test("algWarnings flags alg none, missing alg and key-type mismatches", () => {
   assert.deepEqual(L.algWarnings("RS256", pem), []);
   assert.deepEqual(L.algWarnings("RS256", ""), []);
 });
+
+// Fake JWKS key material: structure-only fixtures, never real keys.
+const FAKE_JWKS = { keys: [
+  { kty: "RSA", kid: "key-example-1", use: "sig", alg: "RS256", n: "fake-modulus", e: "AQAB" },
+  { kty: "EC", kid: "key-example-2", use: "sig", alg: "ES256", crv: "P-256", x: "fake-x", y: "fake-y" },
+  { kty: "oct", kid: "key-example-3", use: "sig", alg: "HS256", k: "fake-secret" }
+]};
+
+test("parseJwks accepts an object or JSON string and rejects bad shapes", () => {
+  assert.equal(L.parseJwks(FAKE_JWKS).length, 3);
+  assert.equal(L.parseJwks(JSON.stringify(FAKE_JWKS))[1].kid, "key-example-2");
+  assert.throws(() => L.parseJwks("not json"), /not valid JSON/);
+  assert.throws(() => L.parseJwks(""), /Paste a JWKS/);
+  assert.throws(() => L.parseJwks({}), /keys array/);
+  assert.throws(() => L.parseJwks({ keys: ["nope"] }), /not an object/);
+});
+
+test("selectJwksKey picks by kid and validates kty and curve against alg", () => {
+  assert.equal(L.selectJwksKey(FAKE_JWKS, "key-example-1", "RS256").kty, "RSA");
+  assert.equal(L.selectJwksKey(FAKE_JWKS, "key-example-2", "ES256").crv, "P-256");
+  assert.equal(L.selectJwksKey(FAKE_JWKS, "key-example-3", "HS256").kty, "oct");
+  assert.throws(() => L.selectJwksKey(FAKE_JWKS, "key-missing", "RS256"), /No key with kid/);
+  assert.throws(() => L.selectJwksKey(FAKE_JWKS, "key-example-2", "RS256"), /needs 'RSA'/);
+  assert.throws(() => L.selectJwksKey(FAKE_JWKS, "key-example-1", "HS256"), /needs 'oct'/);
+  const wrongCurve = { keys: [{ kty: "EC", kid: "k1", crv: "P-384", x: "x", y: "y" }] };
+  assert.throws(() => L.selectJwksKey(wrongCurve, "k1", "ES256"), /needs 'P-256'/);
+});
+
+test("selectJwksKey without a kid uses the only key and refuses ambiguity", () => {
+  const single = { keys: [{ kty: "RSA", kid: "only-key", n: "fake", e: "AQAB" }] };
+  assert.equal(L.selectJwksKey(single, undefined, "RS256").kid, "only-key");
+  assert.throws(() => L.selectJwksKey(FAKE_JWKS, undefined, "RS256"), /cannot pick one/);
+  assert.throws(() => L.selectJwksKey({ keys: [] }, undefined, "RS256"), /no keys/);
+});

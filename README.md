@@ -6,6 +6,7 @@ Decode, verify (HS256/RS256/ES256) and expiry-check JWTs entirely offline, with 
 ## Features
 - Decode header and payload with registered-claim humanising: exp, iat and nbf become local and UTC times with a countdown
 - Verify HS256, RS256 and ES256 signatures locally with WebCrypto
+- Import a JWKS (pasted JSON, never fetched) to pick the verification key by the token's kid
 - Claim diffing: paste two tokens and see added, removed and changed claims
 - Redacted copy mode that masks the signature and sensitive claims for tickets
 - Works offline after load and never puts a token in the URL
